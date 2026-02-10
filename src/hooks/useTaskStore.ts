@@ -11,36 +11,36 @@ const defaultProjects: Project[] = [
   { id: "work", name: "Work", color: "hsl(30, 80%, 55%)" },
 ];
 
-// JSONP-style GET: loads script tag to bypass CORS redirect
-function fetchViaJsonp(url: string): Promise<any> {
+// All communication via JSONP to bypass CORS
+function jsonpRequest(params: Record<string, string>): Promise<any> {
   return new Promise((resolve, reject) => {
-    const callbackName = `_cb_${Date.now()}`;
+    const callbackName = `_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
 
-    (window as any)[callbackName] = (data: any) => {
-      resolve(data);
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Request timed out"));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timeout);
       delete (window as any)[callbackName];
-      document.body.removeChild(script);
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    (window as any)[callbackName] = (data: any) => {
+      cleanup();
+      resolve(data);
     };
 
-    script.src = `${url}?callback=${callbackName}`;
+    const query = new URLSearchParams({ ...params, callback: callbackName }).toString();
+    script.src = `${APPS_SCRIPT_URL}?${query}`;
     script.onerror = () => {
+      cleanup();
       reject(new Error("JSONP request failed"));
-      delete (window as any)[callbackName];
-      document.body.removeChild(script);
     };
 
     document.body.appendChild(script);
-  });
-}
-
-// POST via no-cors (fire-and-forget, can't read response)
-async function postToAppsScript(payload: object): Promise<void> {
-  await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload),
   });
 }
 
@@ -53,15 +53,13 @@ export function useTaskStore() {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await fetchViaJsonp(APPS_SCRIPT_URL);
+      const data = await jsonpRequest({ action: "list" });
       const parsed: Task[] = (Array.isArray(data) ? data : []).map((row: any) => ({
         id: String(row.id),
         title: String(row.title),
@@ -80,9 +78,7 @@ export function useTaskStore() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
   const addTask = useCallback(
     async (title: string, priority: Priority = 4, projectId?: string) => {
@@ -96,8 +92,16 @@ export function useTaskStore() {
       };
       setTasks((prev) => [newTask, ...prev]);
       try {
-        await postToAppsScript({ action: "add", task: newTask });
-        toast.success("Task saved");
+        await jsonpRequest({
+          action: "add",
+          id: newTask.id,
+          title: newTask.title,
+          completed: "false",
+          priority: String(newTask.priority),
+          projectId: newTask.projectId,
+          dueDate: newTask.dueDate || "",
+          createdAt: newTask.createdAt,
+        });
       } catch (err) {
         console.error("Failed to add task:", err);
         if (mountedRef.current) {
@@ -114,7 +118,7 @@ export function useTaskStore() {
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
     try {
-      await postToAppsScript({ action: "toggle", id });
+      await jsonpRequest({ action: "toggle", id });
     } catch (err) {
       console.error("Failed to toggle task:", err);
       if (mountedRef.current) {
@@ -133,7 +137,7 @@ export function useTaskStore() {
       return prev.filter((t) => t.id !== id);
     });
     try {
-      await postToAppsScript({ action: "delete", id });
+      await jsonpRequest({ action: "delete", id });
     } catch (err) {
       console.error("Failed to delete task:", err);
       if (mountedRef.current) {
