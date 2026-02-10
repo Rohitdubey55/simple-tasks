@@ -11,6 +11,39 @@ const defaultProjects: Project[] = [
   { id: "work", name: "Work", color: "hsl(30, 80%, 55%)" },
 ];
 
+// JSONP-style GET: loads script tag to bypass CORS redirect
+function fetchViaJsonp(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const callbackName = `_cb_${Date.now()}`;
+    const script = document.createElement("script");
+
+    (window as any)[callbackName] = (data: any) => {
+      resolve(data);
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+
+    script.src = `${url}?callback=${callbackName}`;
+    script.onerror = () => {
+      reject(new Error("JSONP request failed"));
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+
+    document.body.appendChild(script);
+  });
+}
+
+// POST via no-cors (fire-and-forget, can't read response)
+async function postToAppsScript(payload: object): Promise<void> {
+  await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function useTaskStore() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects] = useState<Project[]>(defaultProjects);
@@ -28,11 +61,8 @@ export function useTaskStore() {
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(APPS_SCRIPT_URL, { redirect: "follow" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      const data = JSON.parse(text);
-      const parsed: Task[] = data.map((row: any) => ({
+      const data = await fetchViaJsonp(APPS_SCRIPT_URL);
+      const parsed: Task[] = (Array.isArray(data) ? data : []).map((row: any) => ({
         id: String(row.id),
         title: String(row.title),
         completed: row.completed === true || row.completed === "TRUE",
@@ -66,11 +96,8 @@ export function useTaskStore() {
       };
       setTasks((prev) => [newTask, ...prev]);
       try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "add", task: newTask }),
-        });
+        await postToAppsScript({ action: "add", task: newTask });
+        toast.success("Task saved");
       } catch (err) {
         console.error("Failed to add task:", err);
         if (mountedRef.current) {
@@ -87,11 +114,7 @@ export function useTaskStore() {
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
     try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "toggle", id }),
-      });
+      await postToAppsScript({ action: "toggle", id });
     } catch (err) {
       console.error("Failed to toggle task:", err);
       if (mountedRef.current) {
@@ -110,11 +133,7 @@ export function useTaskStore() {
       return prev.filter((t) => t.id !== id);
     });
     try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "delete", id }),
-      });
+      await postToAppsScript({ action: "delete", id });
     } catch (err) {
       console.error("Failed to delete task:", err);
       if (mountedRef.current) {
