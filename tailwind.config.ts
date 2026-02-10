@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +60,16 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        task: {
+          hover: "hsl(var(--task-hover))",
+        },
+        priority: {
+          1: "hsl(var(--priority-1))",
+          2: "hsl(var(--priority-2))",
+          3: "hsl(var(--priority-3))",
+          4: "hsl(var(--priority-4))",
+        },
+        success: "hsl(var(--success))",
       },
       borderRadius: {
         lg: "var(--radius)",
