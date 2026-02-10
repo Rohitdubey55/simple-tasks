@@ -28,9 +28,10 @@ export function useTaskStore() {
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(APPS_SCRIPT_URL);
+      const res = await fetch(APPS_SCRIPT_URL, { redirect: "follow" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const text = await res.text();
+      const data = JSON.parse(text);
       const parsed: Task[] = data.map((row: any) => ({
         id: String(row.id),
         title: String(row.title),
@@ -67,6 +68,7 @@ export function useTaskStore() {
       try {
         await fetch(APPS_SCRIPT_URL, {
           method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({ action: "add", task: newTask }),
         });
       } catch (err) {
@@ -87,6 +89,7 @@ export function useTaskStore() {
     try {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action: "toggle", id }),
       });
     } catch (err) {
@@ -109,6 +112,7 @@ export function useTaskStore() {
     try {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action: "delete", id }),
       });
     } catch (err) {
