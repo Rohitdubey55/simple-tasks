@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Task, Project, Priority } from "@/types/task";
 import { toast } from "sonner";
 
@@ -16,12 +16,20 @@ export function useTaskStore() {
   const [projects] = useState<Project[]>(defaultProjects);
   const [activeView, setActiveView] = useState("inbox");
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
-  // Fetch tasks from Google Sheets
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(APPS_SCRIPT_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const parsed: Task[] = data.map((row: any) => ({
         id: String(row.id),
@@ -32,12 +40,12 @@ export function useTaskStore() {
         dueDate: row.dueDate ? String(row.dueDate) : undefined,
         createdAt: String(row.createdAt || new Date().toISOString()),
       }));
-      setTasks(parsed);
+      if (mountedRef.current) setTasks(parsed);
     } catch (err) {
       console.error("Failed to fetch tasks:", err);
-      toast.error("Failed to load tasks from Google Sheets");
+      if (mountedRef.current) toast.error("Failed to load tasks from Google Sheets");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
@@ -55,7 +63,6 @@ export function useTaskStore() {
         projectId: projectId || (activeView === "today" ? "inbox" : activeView),
         createdAt: new Date().toISOString(),
       };
-      // Optimistic update
       setTasks((prev) => [newTask, ...prev]);
       try {
         await fetch(APPS_SCRIPT_URL, {
@@ -64,8 +71,10 @@ export function useTaskStore() {
         });
       } catch (err) {
         console.error("Failed to add task:", err);
-        toast.error("Failed to save task to Google Sheets");
-        setTasks((prev) => prev.filter((t) => t.id !== newTask.id));
+        if (mountedRef.current) {
+          toast.error("Failed to save task to Google Sheets");
+          setTasks((prev) => prev.filter((t) => t.id !== newTask.id));
+        }
       }
     },
     [activeView]
@@ -82,10 +91,12 @@ export function useTaskStore() {
       });
     } catch (err) {
       console.error("Failed to toggle task:", err);
-      toast.error("Failed to update task");
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-      );
+      if (mountedRef.current) {
+        toast.error("Failed to update task");
+        setTasks((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+        );
+      }
     }
   }, []);
 
@@ -102,8 +113,10 @@ export function useTaskStore() {
       });
     } catch (err) {
       console.error("Failed to delete task:", err);
-      toast.error("Failed to delete task");
-      if (deleted) setTasks((prev) => [...prev, deleted!]);
+      if (mountedRef.current) {
+        toast.error("Failed to delete task");
+        if (deleted) setTasks((prev) => [...prev, deleted!]);
+      }
     }
   }, []);
 
