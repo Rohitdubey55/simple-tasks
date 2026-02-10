@@ -3,7 +3,7 @@ import { Task, Project, Priority } from "@/types/task";
 import { toast } from "sonner";
 
 const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwoz8jhO9i6Df1gXEk8VpNLsfgtaRxGWV9e7ygi6n1sZk8tL70ic4R9n_7hzc6gpx1Miw/exec";
+  "https://script.google.com/macros/s/AKfycbzzwZutrkB7Ec0PXFkQ7LYlnmC8Yt5EMhtOVYLz6jvXze1zWwk607DE4SIhZv_G2uUOvQ/exec";
 
 const defaultProjects: Project[] = [
   { id: "inbox", name: "Inbox", color: "hsl(210, 60%, 55%)" },
